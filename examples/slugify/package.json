@@ -1,0 +1,6 @@
+{
+  "name": "goflow-slugify-example",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test test/slugify.test.mjs" }
+}

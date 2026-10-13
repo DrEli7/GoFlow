@@ -1,0 +1,9 @@
+{
+  "name": "goflow",
+  "version": "1.1.0",
+  "description": "本地 Codex GPT × OpenCode Go 默认协作、隔离补丁、验证与失败升级。",
+  "author": {"name": "Local GoFlow"},
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {"displayName": "GoFlow", "shortDescription": "GPT 主导与 Go 订阅任务协作"}
+}

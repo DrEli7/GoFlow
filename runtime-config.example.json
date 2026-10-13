@@ -1,0 +1,29 @@
+{
+  "version": 1.1,
+  "mode": "auto",
+  "billingGuard": {
+    "useBalanceDisabledConfirmed": false,
+    "activeGoSubscriptionConfirmed": false,
+    "confirmedAt": null,
+    "confirmationSource": null
+  },
+  "opencodeExe": null,
+  "gitExe": null,
+  "nodeExe": null,
+  "pythonExe": null,
+  "maxRepairAttempts": 2,
+  "timeoutMs": 180000,
+  "maxFileBytes": 100000,
+  "maxContextBytes": 400000,
+  "quota": {
+    "enabled": true,
+    "cacheTtlMs": 60000,
+    "warningPercent": 80,
+    "stopPercent": 95,
+    "maxConcurrent": 1,
+    "credentialSource": "opencode",
+    "defaultPriority": "normal",
+    "lowPriorityExhaustion": "queue",
+    "allowPayAsYouGo": false
+  }
+}

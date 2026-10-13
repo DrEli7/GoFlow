@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "goflow": {
+      "command": "<ABSOLUTE_NODE_EXE>",
+      "args": [
+        "<ABSOLUTE_INSTALLED_GOFLOW_ROOT>/src/server.mjs"
+      ]
+    }
+  }
+}
