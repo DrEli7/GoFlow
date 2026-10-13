@@ -1,0 +1,22 @@
+# Generated machine configuration and private local records
+/runtime-config.json
+/.mcp.json
+/state/
+/backups/
+/evidence/
+/research/
+/acceptance-projects/
+/delivery-manifest*.json
+/.goflow-export-owned
+/.goflow-upload-manifest.local.json
+.env
+.env.*
+auth.json
+credentials.json
+__pycache__/
+*.pyc
+*.sqlite*
+*.db
+*.log
+*.zip
+node_modules/
