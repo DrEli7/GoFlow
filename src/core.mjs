@@ -15,6 +15,13 @@ const billingConfirmed = cfg => cfg.billingGuard?.useBalanceDisabledConfirmed ==
   && cfg.billingGuard?.activeGoSubscriptionConfirmed === true;
 const MAX_OUTPUT = 2_000_000;
 const HIGH_RISK = /(?:\b(?:auth(?:entication|orization)?|oauth|security|crypto(?:graphy)?|encrypt(?:ion)?|decrypt|password|credential|secret|payment|billing|production|deploy|database\s+migration|privilege|permission|sandbox|vulnerabilit\w*|exploit|sql\s+inject|token)\b|认证|授权|密钥|凭据|密码|加密|解密|支付|计费|安全|生产环境|部署|数据库迁移|提权|权限|漏洞|沙箱)/i;
+// Only omit exact credential-exclusion guardrails from classification. The full
+// task, including those restrictions, is still sent unchanged to the worker.
+// Actual security work elsewhere and explicit high risk always retain GPT.
+function riskTaskText(task) {
+  return task.replace(/(?:不要|不得|禁止|不)(?:读取|查看|显示|输出|复制|上传|保存|记录)(?:(?:或|和)(?:读取|查看|显示|输出|复制|上传|保存|记录))*\s*(?:任何|现有|本机|用户)?\s*(?:API\s*Key|API\s*密钥|密钥|凭据)(?=$|[\s，。；、,.;:：]|或项目外文件|或其他项目文件)/gi,'')
+    .replace(/\b(?:do not|don't|never)\s+(?:read|access|display|output|copy|upload|store|log)\s+(?:(?:or|and)\s+(?:read|access|display|output|copy|upload|store|log)\s+)*(?:any\s+)?(?:credentials?|secrets?|api\s+keys?)(?=$|[\s,.;:])/gi,'');
+}
 const COMPLEX = /(?:\b(?:architect(?:ure)?|distributed|consensus|complex\s+algorithm|algorithm\s+design|redesign)\b|架构|分布式|一致性协议|复杂算法|算法设计|整体重构)/i;
 const FORBIDDEN_SEGMENT = /^(?:\.git|\.codex|\.opencode|\.ssh|\.aws|\.azure|node_modules|\.npm|\.gnupg|\.kube)$/i;
 const FORBIDDEN_FILE = /^(?:\.env(?:\..*)?|auth\.json|credentials?(?:\..*)?|secrets?(?:\..*)?|id_(?:rsa|ed25519|dsa|ecdsa)(?:\.pub)?|\.npmrc|\.netrc|\.pypirc|opencode\.jsonc?|config\.toml)$/i;
@@ -412,7 +419,7 @@ export class GoFlow {
     const risk = request.risk ?? 'low', complexity = request.complexity ?? 'simple';
     if (!['low', 'high'].includes(risk) || !['simple', 'moderate', 'high'].includes(complexity)) throw new Error('risk或complexity无效');
     let executor = 'go', reason = '需求明确、风险低的普通编码任务默认委派OpenCode Go';
-    if (risk === 'high' || HIGH_RISK.test(task)) { executor = 'gpt'; reason = '高风险任务保留给当前GPT主智能体，强制Go不能绕过风险门'; }
+    if (risk === 'high' || HIGH_RISK.test(riskTaskText(task))) { executor = 'gpt'; reason = '高风险任务保留给当前GPT主智能体，强制Go不能绕过风险门'; }
     else if (complexity === 'high' || COMPLEX.test(task)) { executor = 'gpt'; reason = '复杂算法或架构任务保留给当前GPT主智能体'; }
     else if (mode === 'gpt' || mode === 'off') { executor = 'gpt'; reason = mode === 'off' ? '自动委派已关闭' : '强制GPT模式'; }
     const result = { executor, mode, risk, complexity, reason,

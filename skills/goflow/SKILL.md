@@ -28,3 +28,20 @@ Go 首次失败后，桥接器只根据具体错误或测试失败修复，最�
 额度/授权/服务问题返回 `queued` 并说明类别，使用 `goflow_queue` 和 `goflow_resume` 延续原任务ID；不自动升高级GPT、不作为代码能力失败计数、不重新开任务绕过修复上限。用户明确选择GPT则使用当前ChatGPT/Codex订阅；复杂或高风险工作仍照原规则由GPT执行。后续任务触发额度刷新，符合原授权且输入未变的待执行任务可恢复，无需高占用常驻轮询。
 
 查询凭据仅由私有helper在内存读取并发往固定官方额度URL；不自行打开auth文件、要求对话中粘贴Key、提取Cookie或ChatGPT令牌。新的隐藏本地输入采用Windows Credential Manager，额度缓存绑定实际推理凭据。API不返回Use balance时保留未知，不自行开启费用保护或更改账户设置。这个可信helper的用途是用户明确授权的额度查询，不能扩大为任意API密钥读取。
+
+
+## 桌面本地入口 V1.1.2
+
+默认用户目录的代码任务先用已安装GoFlow的scripts/client.mjs调用goflow_status，检查用户注册、插件显式禁用和本机固定服务路径；正式MCP工具可用时随后使用其中一个入口，当前聊天没有工具则继续用客户端。每次操作只调用一个入口。客户端参数只有原有10个tool名称，JSON参数从stdin提供，保留全部服务保护；不能指定别的配置、执行器、目录或授权。若使用自定义CODEX_HOME，客户端拒绝，使用该host的正式MCP或报告限制。
+
+PowerShell调用示例：先从当前安装的非凭据runtime-config.json选择nodeExe字段；用明确的安装路径替换下面位置，不要打开auth文件或把API Key当参数。
+
+```powershell
+$goflowRuntime = Join-Path $env:USERPROFILE '.codex\goflow'
+$goflowNode = (Get-Content -LiteralPath (Join-Path $goflowRuntime 'runtime-config.json') -Raw | ConvertFrom-Json).nodeExe
+'{}' | & $goflowNode (Join-Path $goflowRuntime 'scripts\client.mjs') goflow_status
+$goflowRequest = @{task='添加普通字符串工具和测试';risk='low';complexity='simple'}
+$goflowRequest | ConvertTo-Json -Depth 12 -Compress | & $goflowNode (Join-Path $goflowRuntime 'scripts\client.mjs') goflow_route
+```
+
+stdout是实际MCP result，content[].text中的JSON是服务返回。CLI非0/isError/queued/escalation_required按真实证据处理；不得宣称成功。submit/task/accept等参数从实际src/server.mjs或tools/list取得，只有GPT审核实际产物与测试证据后才能accept。模式off禁止Go执行，但status/usage仍可查看；服务或插件显式disabled时客户端拒绝调用。

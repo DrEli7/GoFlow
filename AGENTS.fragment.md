@@ -23,3 +23,12 @@
 
 V1.1仅允许受信本地私有helper在内存复用现有Go凭据，对固定官方HTTPS额度接口做Bearer GET；密钥不得进入模型上下文、MCP参数、源码、普通配置、日志或备份。新输入只能由本人走官方本地授权或终端隐藏输入，GoFlow新持久化采用Windows Credential Manager。不得提取ChatGPT令牌/浏览器Cookie。额度缓存与实际Go推理凭据绑定，切换凭据立即失效；quota成功不等于Use balance已关闭，原费用保护继续有效。
 <!-- GOFLOW QUOTA END v1.1 -->
+
+
+<!-- GOFLOW DESKTOP BEGIN v1.1.2 -->
+## GoFlow 本地桌面默认入口
+
+本机本地代码聊天自动读取全局goflow技能并执行上述分工，不需要重复提示词。正式工具可用时，每个操作选择用户goflow或已安装插件goflow_plugin中的一个入口。旧聊天工具目录缺少GoFlow、但用户服务注册确实存在启用时，通过已安装runtime的scripts/client.mjs调用同一个GoFlow MCP；不是裸OpenCode或其它付费API。默认用户目录的代码任务先用该入口检查status，再使用usage、route，保留原有隔离、测试、GPT审核/accept与修复上限。
+
+客户端拒绝服务/插件/工具的明确禁用、项目覆盖命令或不匹配路径；不绕过收费、权限和额度保护。非默认CODEX_HOME下不使用此备用入口，正式MCP不可用则按原规则停止Go调用。非代码聊天不用GoFlow。
+<!-- GOFLOW DESKTOP END v1.1.2 -->

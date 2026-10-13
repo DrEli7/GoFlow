@@ -222,6 +222,30 @@ test('[SIMULATED MODEL] high risk and complex tasks stay with GPT even in forced
   assert.equal(f.readSource(), ORIGINAL);
 });
 
+test('ordinary code tasks keep credential exclusion guardrails without being routed as credential work', async t => {
+  const f = setup(t);
+  for (const task of [
+    '添加 isBlank 并编写 Node 单元测试。不得修改 package.json，不添加依赖，不读取凭据或项目外文件。',
+    '添加字符串工具。不要读取或输出 API Key。',
+    'Implement trim helper tests. Do not read credentials or outside project files.',
+    'Implement a local string function; never log secrets.',
+  ]) assert.equal((await f.flow.route({...f.request,task})).executor,'go',task);
+  assert.equal(f.simulation.inferenceCalls().length,0);
+});
+
+test('credential exclusions cannot hide real security work or explicit high risk even in forced Go mode', async t => {
+  const f = setup(t);
+  for (const task of [
+    '不要读取密钥。修改 OAuth 认证与权限判断。',
+    '不要读取凭据，但重新设计密码校验。',
+    'Never read credentials. Rewrite payment billing logic.',
+    'Implement string helper and rotate the API secret.',
+    '不读取凭据内容，修改凭据保存功能。',
+  ]) assert.equal((await f.flow.route({...f.request,task,mode:'go'})).executor,'gpt',task);
+  assert.equal((await f.flow.route({...f.request,task:'字符串工具。不读取凭据。',risk:'high',mode:'go'})).executor,'gpt');
+  assert.equal(f.simulation.inferenceCalls().length,0);
+});
+
 test('[SIMULATED MODEL] catalog filters providers dynamically and never uses a paid preference', async t => {
   const f = setup(t, { config: { modelPreference: ['openai/paid-model', VALID_MODELS[0]] } }, {
     models: ['openai/paid-model', 'opencode/free-model', ...VALID_MODELS, VALID_MODELS[0]],

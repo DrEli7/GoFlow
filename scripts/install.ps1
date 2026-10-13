@@ -72,7 +72,7 @@ $runtime = Join-Path $CodexRoot 'goflow'
 $skill = Join-Path $CodexRoot 'skills\goflow'
 Own-Directory $runtime
 Own-Directory $skill
-$required = @('src\core.mjs','src\cli.mjs','src\server.mjs','src\quota.mjs','scripts\secure_usage.py','scripts\control.mjs','scripts\control.ps1','skills\goflow\SKILL.md','.codex-plugin\plugin.json','runtime-config.example.json','package.json','AGENTS.fragment.md','LICENSE','LICENSE.upstream','.mcp.example.json')
+$required = @('src\core.mjs','src\cli.mjs','src\server.mjs','src\quota.mjs','scripts\secure_usage.py','scripts\client.mjs','scripts\control.mjs','scripts\control.ps1','skills\goflow\SKILL.md','.codex-plugin\plugin.json','runtime-config.example.json','package.json','AGENTS.fragment.md','LICENSE','LICENSE.upstream','.mcp.example.json')
 foreach ($relative in $required) {
   $inputFile = Join-Path $sourceRoot $relative
   Assert-RegularPath $inputFile
@@ -131,7 +131,7 @@ try {
   [System.IO.File]::WriteAllText((Join-Path $runtime '.goflow-owned'), $owner + "`n", $utf8)
   foreach ($folder in @('src','skills\goflow','.codex-plugin')) { Copy-Tree (Join-Path $sourceRoot $folder) (Join-Path $runtime $folder) }
   [System.IO.Directory]::CreateDirectory((Join-Path $runtime 'scripts')) | Out-Null
-  foreach ($relative in @('scripts\install.ps1','scripts\control.mjs','scripts\control.ps1','scripts\secure_usage.py','package.json','AGENTS.fragment.md','LICENSE','LICENSE.upstream','README.md','runtime-config.example.json','.mcp.example.json')) {
+  foreach ($relative in @('scripts\install.ps1','scripts\control.mjs','scripts\control.ps1','scripts\client.mjs','scripts\secure_usage.py','package.json','AGENTS.fragment.md','LICENSE','LICENSE.upstream','README.md','runtime-config.example.json','.mcp.example.json')) {
     $out = Join-Path $runtime $relative
     Assert-RegularPath $out
     [System.IO.File]::Copy((Join-Path $sourceRoot $relative), $out, $true)
