@@ -6,8 +6,9 @@ import { GoFlow } from './core.mjs';
 const base = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const requestSchema = {
   type:'object', additionalProperties:false,
-  properties:{ directory:{type:'string'}, task:{type:'string'}, files:{type:'array',items:{type:'string'}},
-    editableFiles:{type:'array',items:{type:'string'}},
+  properties:{ directory:{type:'string'}, task:{type:'string'},
+    files:{type:'array',items:{type:'string'},description:'Explicit relative paths of already-existing input files only. Existing editable files must also be listed here. New deliverables belong only in editableFiles. Use [] for a wholly new package that needs no existing inputs; do not create placeholder files.'},
+    editableFiles:{type:'array',items:{type:'string'},description:'Explicit relative paths allowed to be changed or created. List new files only here; existing editable files must also appear in files. Include every test file Go must deliver.'},
     tests:{type:'array',minItems:1,items:{type:'object',additionalProperties:false,properties:{command:{type:'string'},args:{type:'array',items:{type:'string'}}},required:['command','args']}},
     risk:{type:'string',enum:['low','high']}, complexity:{type:'string',enum:['simple','moderate','high']},
     mode:{type:'string',enum:['auto','gpt','go','off']}, priority:{type:'string',enum:['low','normal','high']} },
@@ -18,7 +19,7 @@ function toolDefinitions(flow) { return [
  ['goflow_status','Read current mode, billing guard, and local runtime status.',{type:'object',properties:{},additionalProperties:false},()=>flow.status(),true],
  ['goflow_models','Refresh real opencode-go model list; no inference.',{type:'object',properties:{},additionalProperties:false},()=>flow.models(),true],
  ['goflow_route','Classify a task; high risk/complexity stays with current GPT. No inference.',routeSchema,(a)=>flow.route(a),true],
- ['goflow_submit','Delegate bounded low risk work to Go in isolated snapshot. Requires billing confirmation. Tests run locally; successful output still needs GPT review. Never edits original project.',requestSchema,(a)=>flow.submit(a),false],
+ ['goflow_submit','Delegate bounded low risk work to Go in isolated snapshot. files contains existing inputs only; new files go only in editableFiles. Use files=[] for a wholly new package without existing inputs, without placeholder files. Requires billing confirmation and explicit tests. Tests run locally; successful output still needs GPT review. Never edits original project.',requestSchema,(a)=>flow.submit(a),false],
  ['goflow_task','Read saved task evidence and test results.',{type:'object',properties:{taskId:{type:'string'}},required:['taskId'],additionalProperties:false},(a)=>flow.task(a.taskId),true],
  ['goflow_accept','After GPT review, apply tested editable files only if originals have not changed. Reviewer must be GPT.',{type:'object',properties:{taskId:{type:'string'},reviewer:{type:'string',enum:['GPT']},reviewSummary:{type:'string',minLength:12}},required:['taskId','reviewer','reviewSummary'],additionalProperties:false},(a)=>flow.accept(a.taskId,a),false],
  ['goflow_set_mode','Persist auto/gpt/go/off on user request. Force Go still cannot bypass billing, safety, tests or review.',{type:'object',properties:{mode:{type:'string',enum:['auto','gpt','go','off']}},required:['mode'],additionalProperties:false},(a)=>flow.setMode(a.mode),false]

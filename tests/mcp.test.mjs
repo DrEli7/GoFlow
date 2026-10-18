@@ -29,6 +29,12 @@ test('MCP 1.1 schemas expose shared usage/queue/exact resume without permit or c
   assert.equal((await call('initialize')).result.serverInfo.version,'1.1.0');
   const tools=(await call('tools/list')).result.tools;
   assert.equal(tools.length,10);
+  const submitTool=tools.find(tool=>tool.name==='goflow_submit');
+  assert.equal(submitTool.inputSchema.required.includes('tests'),true,'this public version still requires explicit tests');
+  assert.match(submitTool.inputSchema.properties.files.description,/already-existing input files only/);
+  assert.match(submitTool.inputSchema.properties.files.description,/Use \[\]/);
+  assert.match(submitTool.inputSchema.properties.editableFiles.description,/new files only here/);
+  assert.match(submitTool.description,/files=\[\]/);
   for(const name of ['goflow_usage','goflow_queue','goflow_resume'])assert.ok(tools.some(tool=>tool.name===name));
   assert.equal(tools.some(tool=>/allow.once|override|permit|billing.*confirm/i.test(tool.name)),false);
   for(const tool of tools)assert.equal(Object.keys(tool.inputSchema.properties).some(key=>/secret|bearer|api.?key|url|endpoint/i.test(key)),false);

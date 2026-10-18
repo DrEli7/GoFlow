@@ -171,6 +171,10 @@ async function safePath(root, relative, { missing = false } = {}) {
   return target;
 }
 
+function missingInputFile(relative) {
+  return new Error(`输入文件不存在: ${relative}；files仅允许已存在的输入；若为新建交付文件，请仅列入editableFiles（全新功能包可用files: []）`);
+}
+
 async function atomicJson(target, value) {
   await fs.mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.${randomUUID()}.tmp`;
@@ -609,7 +613,12 @@ export class GoFlow {
       const context = [], originals = {};
       let bytes = 0;
       for (const name of new Set([...files, ...editable])) {
-        const target = await safePath(realDirectory, name, { missing: !files.includes(name) });
+        let target;
+        try { target = await safePath(realDirectory, name, { missing: !files.includes(name) }); }
+        catch (error) {
+          if (error.code === 'ENOENT' && files.includes(name)) throw missingInputFile(name);
+          throw error;
+        }
         let content = null;
         try {
           const st = await fs.stat(target);
@@ -623,7 +632,8 @@ export class GoFlow {
           if (bytes > cfg.maxContextBytes) throw new Error('上下文总大小超限');
           originals[name] = { existed: true, hash: hash(buffer), size: buffer.length };
         } catch (error) {
-          if (error.code !== 'ENOENT' || files.includes(name)) throw error;
+          if (error.code !== 'ENOENT') throw error;
+          if (files.includes(name)) throw missingInputFile(name);
           originals[name] = { existed: false, hash: null, size: 0 };
         }
         context.push({ path: name, content });

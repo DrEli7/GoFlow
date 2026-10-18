@@ -464,6 +464,50 @@ test('[SIMULATED MODEL] traversal, absolute, control-config, and Windows reserve
   assert.equal(f.readSource(), ORIGINAL);
 });
 
+test('[SIMULATED MODEL] missing existing-input declarations explain new-file placement before any model request', async t => {
+  const f = setup(t);
+  for (const missing of ['src/new-deliverable.mjs', 'new-package/new-deliverable.mjs']) {
+    const record = await f.flow.submit({ ...f.request, files: [missing, PROJECT_TEST], editableFiles: [missing] });
+    assert.equal(record.status, 'blocked', record.reason);
+    assert.match(record.reason, /输入文件不存在/);
+    assert.ok(record.reason.includes(missing));
+    assert.match(record.reason, /仅列入editableFiles/);
+    assert.match(record.reason, /files: \[\]/);
+    assert.deepEqual(record.attempts, []);
+    assert.equal(fs.existsSync(path.join(f.directory, missing)), false, 'diagnostics never create placeholders');
+    assert.equal((await f.flow.task(record.taskId)).reason, record.reason);
+  }
+  assert.equal(f.simulation.inferenceCalls().length, 0);
+  assert.equal(f.simulation.calls.length, 0, 'preflight failure does not invoke provider, discovery or test processes');
+  assert.equal(f.quotaCalls.length, 0, 'invalid input is rejected before inference admission');
+  assert.equal(f.readSource(), ORIGINAL);
+});
+
+test('[SIMULATED MODEL] empty existing inputs permit declared new files with explicit tests and final GPT acceptance', async t => {
+  let acceptanceCode;
+  const f = setup(t, undefined, { response: () => ({ files: [
+    { path: SOURCE, content: CORRECT }, { path: PROJECT_TEST, content: acceptanceCode },
+  ] }) });
+  acceptanceCode = fs.readFileSync(path.join(f.directory, PROJECT_TEST), 'utf8');
+  for (const name of [SOURCE, PROJECT_TEST]) fs.unlinkSync(path.join(f.directory, name));
+  const request = { ...f.request, files: [], editableFiles: [SOURCE, PROJECT_TEST] };
+  const record = await f.flow.submit(request);
+  assert.equal(record.status, 'review_required', record.reason);
+  assert.deepEqual(record.files, []);
+  for (const name of [SOURCE, PROJECT_TEST]) {
+    assert.deepEqual(record.originals[name], { existed: false, hash: null, size: 0 });
+    assert.equal(fs.existsSync(path.join(f.directory, name)), false, 'new files remain absent until GPT acceptance');
+  }
+  assert.equal(record.attempts.length, 1);
+  assert.equal(f.simulation.inferenceCalls().length, 1);
+  assert.ok(record.attempts[0].tests.length > 0);
+  assert.ok(record.attempts[0].tests.every(item => item.passed));
+  const accepted = await f.flow.accept(record.taskId, REVIEW);
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(f.readSource(), CORRECT);
+  assert.equal(fs.readFileSync(path.join(f.directory, PROJECT_TEST), 'utf8'), acceptanceCode);
+});
+
 test('[SIMULATED MODEL] real junction/symlink and hard-linked inputs are rejected', async t => {
   const f = setup(t);
   const outside = path.join(f.root, 'outside');
