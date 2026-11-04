@@ -38,12 +38,12 @@ function screenTestCode(contents) {
   for (const { path: name, content } of contents) {
     if (content === null || !/\.(?:js|cjs|mjs)$/i.test(name)) continue;
     if (/\b(?:fetch|XMLHttpRequest|WebSocket|process|globalThis|global|eval|Deno|Bun)\b|(?:\b(?:new\s+)?Function\s*\(|__proto__|constructor\s*\[|\.constructor\s*\(|import\s*\(|\\u\{?[0-9a-f])/i.test(content)) {
-      throw new Error(`测试前代码审查发现动态执行或外部I/O能力: ${name}；需要GPT手动审核和测试`);
+      throw new Error(`Pre-test review found dynamic execution or external I/O: ${name}; GPT must review and test this manually`);
     }
     const modules = [...content.matchAll(/(?:\bfrom\s*|\bimport\s*|\brequire\s*\(\s*)['"]([^'"]+)['"]/g)].map(m => m[1]);
-    if (modules.some(m => !m.startsWith('.') && !SAFE_JS_MODULES.has(m))) throw new Error(`测试前代码审查发现未准许模块: ${name}；需要GPT手动测试`);
+    if (modules.some(m => !m.startsWith('.') && !SAFE_JS_MODULES.has(m))) throw new Error(`Pre-test review found an unapproved module: ${name}; GPT must test this manually`);
     if ((content.match(/\brequire\s*\(/g)?.length ?? 0) !== (content.match(/\brequire\s*\(\s*['"][^'"]+['"]\s*\)/g)?.length ?? 0)) {
-      throw new Error(`测试前代码审查发现动态require: ${name}`);
+      throw new Error(`Pre-test review found dynamic require: ${name}`);
     }
   }
 }
@@ -129,19 +129,19 @@ export function runProcess(executable, args, options = {}) {
 }
 
 function relativeFile(input) {
-  if (typeof input !== 'string' || !input || input.length > 220 || /[\x00-\x1f:*?"<>|]/.test(input)) throw new Error('文件路径无效');
+  if (typeof input !== 'string' || !input || input.length > 220 || /[\x00-\x1f:*?"<>|]/.test(input)) throw new Error('Invalid file path');
   const normalized = input.replaceAll('\\', '/');
-  if (path.isAbsolute(input) || normalized.startsWith('/') || normalized.split('/').some(s => !s || s === '.' || s === '..')) throw new Error('仅接受项目内相对文件路径');
+  if (path.isAbsolute(input) || normalized.startsWith('/') || normalized.split('/').some(s => !s || s === '.' || s === '..')) throw new Error('Only project-relative file paths are accepted');
   const segments = normalized.split('/');
-  if (segments.some(s => FORBIDDEN_SEGMENT.test(s)) || FORBIDDEN_FILE.test(segments.at(-1)) || /\.(?:pem|p12|pfx|key|keystore)$/i.test(normalized)) throw new Error('敏感或控制配置路径不允许委派');
-  if (segments.some(s => /[. ]$/.test(s) || /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(s))) throw new Error('Windows保留文件路径不允许委派');
+  if (segments.some(s => FORBIDDEN_SEGMENT.test(s)) || FORBIDDEN_FILE.test(segments.at(-1)) || /\.(?:pem|p12|pfx|key|keystore)$/i.test(normalized)) throw new Error('Sensitive or control-configuration paths cannot be delegated');
+  if (segments.some(s => /[. ]$/.test(s) || /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(s))) throw new Error('Reserved Windows paths cannot be delegated');
   return normalized;
 }
 
 function uniqueFiles(values) {
-  if (!Array.isArray(values) || values.length > 100) throw new Error('files必须是最多100个相对路径的数组');
+  if (!Array.isArray(values) || values.length > 100) throw new Error('files must be an array of at most 100 relative paths');
   const result = values.map(relativeFile);
-  if (new Set(result.map(f => f.toLowerCase())).size !== result.length) throw new Error('文件路径重复或大小写冲突');
+  if (new Set(result.map(f => f.toLowerCase())).size !== result.length) throw new Error('Duplicate or case-conflicting file paths');
   return result;
 }
 
@@ -152,17 +152,17 @@ function contained(root, target) {
 
 async function safePath(root, relative, { missing = false } = {}) {
   const target = path.resolve(root, relative);
-  if (!contained(root, target)) throw new Error('路径逃逸');
+  if (!contained(root, target)) throw new Error('Path escapes the project');
   const parts = relative.split('/');
   let cursor = root;
   for (let i = 0; i < parts.length; i++) {
     cursor = path.join(cursor, parts[i]);
     try {
       const st = await fs.lstat(cursor);
-      if (st.isSymbolicLink()) throw new Error('符号链接或junction不允许委派');
-      if (i < parts.length - 1 && !st.isDirectory()) throw new Error('文件父目录无效');
-      if (i === parts.length - 1 && !st.isFile()) throw new Error('仅允许普通文件');
-      if (i === parts.length - 1 && st.nlink > 1) throw new Error('硬链接文件不允许委派');
+      if (st.isSymbolicLink()) throw new Error('Symbolic links or junctions cannot be delegated');
+      if (i < parts.length - 1 && !st.isDirectory()) throw new Error('Invalid parent directory');
+      if (i === parts.length - 1 && !st.isFile()) throw new Error('Only regular files are allowed');
+      if (i === parts.length - 1 && st.nlink > 1) throw new Error('Hard-linked files cannot be delegated');
     } catch (error) {
       if (error.code !== 'ENOENT' || !missing) throw error;
       break;
@@ -172,7 +172,7 @@ async function safePath(root, relative, { missing = false } = {}) {
 }
 
 function missingInputFile(relative) {
-  return new Error(`输入文件不存在: ${relative}；files仅允许已存在的输入；若为新建交付文件，请仅列入editableFiles（全新功能包可用files: []）`);
+  return new Error(`Input file does not exist: ${relative}; files accepts existing inputs only; list new output files only in editableFiles (a new package may use files: [])`);
 }
 
 async function atomicJson(target, value) {
@@ -190,7 +190,7 @@ function ownerAlive(pid) {
 // Fully written hard-link claims avoid the crash window of an empty wx lock.
 // A separate recursively recoverable owner lock serializes stale-file removal.
 async function acquireOwnedLock(filename, depth = 0) {
-  if (depth > 16) throw new Error('锁恢复链过长，需要检查遗留进程');
+  if (depth > 16) throw new Error('Lock recovery chain is too long; inspect remaining processes');
   await fs.mkdir(path.dirname(filename), { recursive: true });
   const id = randomUUID();
   const claim = `${filename}.claim-${id}`;
@@ -208,44 +208,44 @@ async function acquireOwnedLock(filename, depth = 0) {
   const inspect = async () => {
     try {
       const stat = await fs.lstat(filename);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) throw new Error('锁元数据无效');
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) throw new Error('Invalid lock metadata');
       const value = JSON.parse(await fs.readFile(filename, 'utf8'));
-      if (!value.id || !Number.isInteger(value.pid) || value.pid < 1) throw new Error('锁元数据无效，不能推断原持有者已退出');
+      if (!value.id || !Number.isInteger(value.pid) || value.pid < 1) throw new Error('Invalid lock metadata; cannot assume the previous owner exited');
       return value;
     } catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   };
   const previous = await inspect();
-  if (previous && ownerAlive(previous.pid)) throw new Error('另一个操作持有该锁');
+  if (previous && ownerAlive(previous.pid)) throw new Error('Another operation holds this lock');
   const recovery = await acquireOwnedLock(`${filename}.recovery`, depth + 1);
   try {
     const current = await inspect();
-    if (current && ownerAlive(current.pid)) throw new Error('另一个操作持有该锁');
+    if (current && ownerAlive(current.pid)) throw new Error('Another operation holds this lock');
     if (current) await fs.unlink(filename);
-    try { return await create(); } catch (error) { if (error.code === 'EEXIST') throw new Error('另一个操作取得该锁'); throw error; }
+    try { return await create(); } catch (error) { if (error.code === 'EEXIST') throw new Error('Another operation acquired this lock'); throw error; }
   } finally { await recovery.release(); }
 }
 
 function requireExecutable(executable, label) {
-  if (typeof executable !== 'string' || !path.isAbsolute(executable) || /\.(?:cmd|bat|ps1)$/i.test(executable)) throw new Error(`${label}必须是绝对可执行文件路径，禁止shell包装器`);
-  if (process.platform === 'win32' && !/\.exe$/i.test(executable)) throw new Error(`${label}必须使用原生.exe`);
+  if (typeof executable !== 'string' || !path.isAbsolute(executable) || /\.(?:cmd|bat|ps1)$/i.test(executable)) throw new Error(`${label} must be an absolute executable path; shell wrappers are forbidden`);
+  if (process.platform === 'win32' && !/\.exe$/i.test(executable)) throw new Error(`${label} must use a native .exe`);
   return executable;
 }
 
 function strictFiles(text, editable, maxFileBytes, maxContextBytes) {
   let result;
-  try { result = JSON.parse(text); } catch { throw new Error('模型输出不是严格JSON，必须仅返回{"files":[{"path":"...","content":"..."}]}'); }
-  if (!result || Array.isArray(result) || Object.keys(result).length !== 1 || !Array.isArray(result.files) || result.files.length < 1) throw new Error('模型JSON结构无效');
+  try { result = JSON.parse(text); } catch { throw new Error('Model output is not strict JSON; return only {"files":[{"path":"...","content":"..."}]}'); }
+  if (!result || Array.isArray(result) || Object.keys(result).length !== 1 || !Array.isArray(result.files) || result.files.length < 1) throw new Error('Invalid model JSON structure');
   const seen = new Set(), allowed = new Set(editable), files = [];
   let total = 0;
   for (const entry of result.files) {
-    if (!entry || typeof entry !== 'object' || Object.keys(entry).sort().join(',') !== 'content,path' || typeof entry.content !== 'string') throw new Error('模型文件记录结构无效');
+    if (!entry || typeof entry !== 'object' || Object.keys(entry).sort().join(',') !== 'content,path' || typeof entry.content !== 'string') throw new Error('Invalid model file record');
     const name = relativeFile(entry.path);
-    if (!allowed.has(name) || seen.has(name.toLowerCase())) throw new Error('模型试图编辑未声明文件或重复文件');
+    if (!allowed.has(name) || seen.has(name.toLowerCase())) throw new Error('Model attempted to edit an undeclared or duplicate file');
     seen.add(name.toLowerCase());
     const size = Buffer.byteLength(entry.content);
     total += size;
-    if (size > maxFileBytes || total > maxContextBytes) throw new Error('模型文件大小超限');
-    if (KEY_PATTERN.test(entry.content)) throw new Error('模型输出含疑似凭据，拒绝保存及应用');
+    if (size > maxFileBytes || total > maxContextBytes) throw new Error('Model file size limit exceeded');
+    if (KEY_PATTERN.test(entry.content)) throw new Error('Model output contains suspected credentials; refusing to save or apply');
     files.push({ path: name, content: entry.content });
   }
   return files;
@@ -294,10 +294,10 @@ export class GoFlow {
   async config() {
     let stored = {};
     try { stored = JSON.parse(await fs.readFile(this.runtimeConfigPath, 'utf8')); }
-    catch (error) { if (error.code !== 'ENOENT') throw new Error('GoFlow runtime配置无效'); }
+    catch (error) { if (error.code !== 'ENOENT') throw new Error('Invalid GoFlow runtime configuration'); }
     const cfg = { mode: 'auto', maxRepairAttempts: 2, timeoutMs: 180_000,
       testTimeoutMs: 60_000, maxFileBytes: 100_000, maxContextBytes: 400_000, ...this.defaults, ...stored };
-    if (!MODES.has(cfg.mode)) throw new Error('GoFlow模式无效');
+    if (!MODES.has(cfg.mode)) throw new Error('Invalid GoFlow mode');
     cfg.maxRepairAttempts = Math.min(2, Math.max(0, Number(cfg.maxRepairAttempts) || 0));
     cfg.timeoutMs = Math.min(600_000, Math.max(1000, Number(cfg.timeoutMs) || 180_000));
     cfg.testTimeoutMs = Math.min(120_000, Math.max(1000, Number(cfg.testTimeoutMs) || 60_000));
@@ -328,7 +328,7 @@ export class GoFlow {
   }
 
   async usage({ force = false } = {}) {
-    if (typeof force !== 'boolean') throw new Error('force必须是boolean');
+    if (typeof force !== 'boolean') throw new Error('force must be a boolean');
     const usage = await this.quota.usage({ force });
     return { channel: 'opencode-go', ...usage };
   }
@@ -371,9 +371,9 @@ export class GoFlow {
   }
 
   async selectModel(model) {
-    if (typeof model !== 'string' || !/^opencode-go\/[A-Za-z0-9._:-]+$/.test(model)) throw new Error('仅允许OpenCode Go模型');
+    if (typeof model !== 'string' || !/^opencode-go\/[A-Za-z0-9._:-]+$/.test(model)) throw new Error('Only OpenCode Go models are allowed');
     const catalog = await this.models();
-    if (!catalog.models.includes(model) || /preview|experimental|alpha|beta|[-_]exp(?:[-_]|$)/i.test(model)) throw new Error('模型不在当前稳定Go目录中');
+    if (!catalog.models.includes(model) || /preview|experimental|alpha|beta|[-_]exp(?:[-_]|$)/i.test(model)) throw new Error('Model is not in the current stable Go catalog');
     const stored = JSON.parse(await fs.readFile(this.runtimeConfigPath, 'utf8'));
     await atomicJson(this.runtimeConfigPath, { ...stored, selectedModel: model,
       modelPreference: [model, ...(stored.modelPreference ?? []).filter(item => item !== model)] });
@@ -385,8 +385,8 @@ export class GoFlow {
   // Only the human-authorized local CLI calls this; no MCP permit tool exists.
   async allowOnce({ taskId, model, authorizationSource } = {}) {
     const record = await this.task(taskId);
-    if (record.status !== 'queued' || record.model !== model) throw new Error('一次许可必须绑定同一个queued taskId及其精确Go模型');
-    if (typeof authorizationSource !== 'string' || authorizationSource.trim().length < 12 || KEY_PATTERN.test(authorizationSource)) throw new Error('必须记录用户明确授权说明，不接受凭据');
+    if (record.status !== 'queued' || record.model !== model) throw new Error('One-time authorization must match the same queued taskId and exact Go model');
+    if (typeof authorizationSource !== 'string' || authorizationSource.trim().length < 12 || KEY_PATTERN.test(authorizationSource)) throw new Error('Record explicit user authorization; credentials are not accepted');
     const permit = await this.quota.createOverride({ taskId, model, source: authorizationSource.trim(), ttlSeconds: 600, maxUses: 1 });
     await atomicJson(path.join(this.stateDir, 'tasks', taskId, 'override-permit.json'), permit);
     await this.log({ type: 'explicit_user_one_task_permit', taskId, model, expiresAt: permit.expiresAt, at: iso() });
@@ -396,7 +396,7 @@ export class GoFlow {
 
   async resume(taskId, { mode } = {}) {
     const record = await this.task(taskId);
-    if (record.status !== 'queued') throw new Error('仅允许恢复同一queued taskId');
+    if (record.status !== 'queued') throw new Error('Only the same queued taskId can be resumed');
     const lockPath = path.join(this.stateDir, 'tasks', taskId, 'resume.lock');
     const lock = await acquireOwnedLock(lockPath);
     try {
@@ -407,7 +407,7 @@ export class GoFlow {
   }
 
   async setMode(mode) {
-    if (!MODES.has(mode)) throw new Error('模式必须是 auto、gpt、go 或 off');
+    if (!MODES.has(mode)) throw new Error('Mode must be auto, gpt, go, or off');
     let stored = {};
     try { stored = JSON.parse(await fs.readFile(this.runtimeConfigPath, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     await atomicJson(this.runtimeConfigPath, { ...stored, mode });
@@ -418,14 +418,14 @@ export class GoFlow {
   async route(request = {}) {
     const cfg = await this.config();
     const mode = request.mode ?? cfg.mode;
-    if (!MODES.has(mode)) throw new Error('路由模式无效');
+    if (!MODES.has(mode)) throw new Error('Invalid routing mode');
     const task = typeof request.task === 'string' ? request.task : '';
     const risk = request.risk ?? 'low', complexity = request.complexity ?? 'simple';
-    if (!['low', 'high'].includes(risk) || !['simple', 'moderate', 'high'].includes(complexity)) throw new Error('risk或complexity无效');
-    let executor = 'go', reason = '需求明确、风险低的普通编码任务默认委派OpenCode Go';
-    if (risk === 'high' || HIGH_RISK.test(riskTaskText(task))) { executor = 'gpt'; reason = '高风险任务保留给当前GPT主智能体，强制Go不能绕过风险门'; }
-    else if (complexity === 'high' || COMPLEX.test(task)) { executor = 'gpt'; reason = '复杂算法或架构任务保留给当前GPT主智能体'; }
-    else if (mode === 'gpt' || mode === 'off') { executor = 'gpt'; reason = mode === 'off' ? '自动委派已关闭' : '强制GPT模式'; }
+    if (!['low', 'high'].includes(risk) || !['simple', 'moderate', 'high'].includes(complexity)) throw new Error('Invalid risk or complexity');
+    let executor = 'go', reason = 'Clear, low-risk ordinary coding tasks default to OpenCode Go';
+    if (risk === 'high' || HIGH_RISK.test(riskTaskText(task))) { executor = 'gpt'; reason = 'High-risk tasks remain with the current GPT agent; force Go cannot bypass the risk gate'; }
+    else if (complexity === 'high' || COMPLEX.test(task)) { executor = 'gpt'; reason = 'Complex algorithm or architecture tasks remain with the current GPT agent'; }
+    else if (mode === 'gpt' || mode === 'off') { executor = 'gpt'; reason = mode === 'off' ? 'Automatic delegation is disabled' : 'Forced GPT mode'; }
     const result = { executor, mode, risk, complexity, reason,
       billingBlocked: executor === 'go' && !billingConfirmed(cfg),
       source: executor === 'go' ? 'OpenCode Go requested provider; billing is account-side and human-attested' : 'Current ChatGPT/Codex session',
@@ -470,16 +470,16 @@ export class GoFlow {
   async validateAuthMetadata(cfg, configDir) {
     const result = await this.runner(cfg.opencodeExe, ['auth', 'list'],
       { cwd: configDir, env: this.env(configDir), timeoutMs: 15_000, maxOutputBytes: 20_000, purpose: 'authMetadata' });
-    if (result.code !== 0 || result.timedOut || result.outputLimit) throw new Error('OpenCode登录元数据无法安全验证，已阻止模型操作');
+    if (result.code !== 0 || result.timedOut || result.outputLimit) throw new Error('OpenCode login metadata could not be safely verified; model operation blocked');
     // The reviewed auth list command emits provider display names and auth types,
     // never key/token values. Do not save or return the actual output.
     const text = result.stdout.replace(/\x1b\[[0-9;]*m/g, '');
     const count = text.match(/\b(\d+) credentials?\b/i);
     const rows = text.split(/\r?\n/).filter(line => /[●•]/.test(line));
     if (!count || rows.length !== Number(count[1]) || rows.some(line => !/\b(?:api|oauth)\s*$/i.test(line)) || /\bwellknown\b/i.test(text)) {
-      throw new Error('登录元数据存在wellknown/未知类型或格式，拒绝潜在remote配置读取；需重新审查');
+      throw new Error('Login metadata contains wellknown or unknown types/formats; possible remote configuration reads are blocked pending review');
     }
-    if (!rows.some(line => /OpenCode Go\s+api\s*$/i.test(line))) throw new Error('OpenCode Go API登录元数据未确认，拒绝切换其他provider');
+    if (!rows.some(line => /OpenCode Go\s+api\s*$/i.test(line))) throw new Error('OpenCode Go API login metadata is unconfirmed; refusing to switch providers');
     return { verifiedAt: iso(), credentialsCount: rows.length, remoteWellKnownAbsent: true, goAuthType: 'api' };
   }
 
@@ -493,10 +493,10 @@ export class GoFlow {
     await this.validateAuthMetadata(cfg, configDir);
     const result = await this.runner(cfg.opencodeExe, ['models', 'opencode-go'],
       { cwd: configDir, env: this.env(configDir), timeoutMs: 60_000, maxOutputBytes: 200_000, purpose: 'models' });
-    if (result.code !== 0 || result.timedOut || result.outputLimit) throw new Error(`OpenCode Go模型目录读取失败: ${redact(result.stderr).slice(0, 1000)}`);
+    if (result.code !== 0 || result.timedOut || result.outputLimit) throw new Error(`Failed to read the OpenCode Go model catalog: ${redact(result.stderr).slice(0, 1000)}`);
     const models = [...new Set(result.stdout.replace(/\x1b\[[0-9;]*m/g, '').split(/\r?\n/).map(s => s.trim())
       .filter(s => /^opencode-go\/[A-Za-z0-9._:-]+$/.test(s)))].sort();
-    if (!models.length) throw new Error('没有实际可用的OpenCode Go模型，拒绝切换付费provider');
+    if (!models.length) throw new Error('No OpenCode Go models are available; refusing to switch paid providers');
     const evidence = { at: iso(), provider: 'opencode-go', models, command: 'opencode models opencode-go', inference: false };
     await atomicJson(path.join(configDir, 'models.json'), evidence);
     // The authoritative evidence above is per invocation. A latest-view cache
@@ -512,13 +512,13 @@ export class GoFlow {
     // A future CLI change requires a new source review before any inference.
     const managedRoot = path.join(process.env.ProgramData ?? 'C:\\ProgramData', 'opencode');
     for (const name of ['opencode.json', 'opencode.jsonc']) {
-      try { await fs.lstat(path.join(managedRoot, name)); throw new Error('检测到机器managed OpenCode配置；为保留已有权限已阻止Go推理，不读取该配置'); }
+      try { await fs.lstat(path.join(managedRoot, name)); throw new Error('Machine-managed OpenCode configuration detected; Go inference is blocked to preserve existing permissions without reading that configuration'); }
       catch (error) { if (error.code !== 'ENOENT') throw error; }
     }
     const result = await this.runner(cfg.opencodeExe, ['--version'],
       { cwd: workdir, env: this.env(configDir, model), timeoutMs: 15_000, maxOutputBytes: 10_000, purpose: 'version' });
     if (result.code !== 0 || result.timedOut || result.outputLimit || result.stdout.trim() !== '1.18.15') {
-      throw new Error('OpenCode版本不是已审查的1.18.15；需重新审查配置隔离后才能推理');
+      throw new Error('OpenCode version is not the reviewed 1.18.15; configuration isolation must be reviewed again before inference');
     }
     return { verifiedAt: iso(), provider: 'opencode-go', toolPolicy: 'deny all', plugins: false, mcp: false,
       configHash: hash(JSON.stringify(restrictedConfig(model))), version: '1.18.15',
@@ -529,19 +529,19 @@ export class GoFlow {
     const result = await this.runner(requireExecutable(cfg.gitExe, 'Git'), ['-c', 'core.autocrlf=false', '-c',
       `core.hooksPath=${path.join(configDir, 'empty-hooks')}`, ...args],
       { cwd: workdir, env: this.env(configDir), timeoutMs: 30_000, maxOutputBytes: MAX_OUTPUT, purpose: 'git' });
-    if (result.code !== 0 || result.timedOut || result.outputLimit) throw new Error(`隔离Git操作失败: ${redact(result.stderr).slice(0, 500)}`);
+    if (result.code !== 0 || result.timedOut || result.outputLimit) throw new Error(`Isolated Git operation failed: ${redact(result.stderr).slice(0, 500)}`);
     return result;
   }
 
   validateTests(tests, cfg) {
-    if (!Array.isArray(tests) || !tests.length || tests.length > 10) throw new Error('必须提供1至10条明确的测试命令');
+    if (!Array.isArray(tests) || !tests.length || tests.length > 10) throw new Error('Provide 1 to 10 explicit test commands');
     const allowed = [cfg.nodeExe].filter(Boolean).map(s => path.resolve(s).toLowerCase());
     return tests.map(test => {
-      const command = requireExecutable(test?.command ?? test?.executable, '测试命令');
-      if (!allowed.includes(path.resolve(command).toLowerCase())) throw new Error('测试可执行文件不在本地可信allowlist中');
-      if (!Array.isArray(test.args) || test.args.length > 50 || test.args.some(a => typeof a !== 'string' || a.length > 1000 || /\x00/.test(a))) throw new Error('测试参数无效');
-      if (test.args.some(a => path.isAbsolute(a) || a.includes('..') || /^(?:--(?:eval|print|import|require|experimental-loader|loader|allow-|no-permission|inspect)|-[epr])(?:=|$)/.test(a))) throw new Error('测试参数禁止外部路径、注入代码或绕过Node权限');
-      if (test.args[0] !== '--test' || test.args.slice(1).some(a => !/^--test-reporter=(?:spec|tap|dot)$/.test(a) && a !== '--test-isolation=none' && a.startsWith('-'))) throw new Error('自动测试仅支持Node --test及相对测试文件路径；其他测试由GPT处理');
+      const command = requireExecutable(test?.command ?? test?.executable, 'Test command');
+      if (!allowed.includes(path.resolve(command).toLowerCase())) throw new Error('Test executable is not on the trusted local allowlist');
+      if (!Array.isArray(test.args) || test.args.length > 50 || test.args.some(a => typeof a !== 'string' || a.length > 1000 || /\x00/.test(a))) throw new Error('Invalid test arguments');
+      if (test.args.some(a => path.isAbsolute(a) || a.includes('..') || /^(?:--(?:eval|print|import|require|experimental-loader|loader|allow-|no-permission|inspect)|-[epr])(?:=|$)/.test(a))) throw new Error('Test arguments cannot use external paths, inject code, or bypass Node permissions');
+      if (test.args[0] !== '--test' || test.args.slice(1).some(a => !/^--test-reporter=(?:spec|tap|dot)$/.test(a) && a !== '--test-isolation=none' && a.startsWith('-'))) throw new Error('Automatic tests support only Node --test and relative test file paths; GPT handles other tests');
       for (const arg of test.args.slice(1).filter(a => !a.startsWith('--'))) relativeFile(arg);
       return { command, args: [...test.args] };
     });
@@ -552,7 +552,7 @@ export class GoFlow {
   }
 
   async task(taskId) {
-    if (typeof taskId !== 'string' || !/^[a-f0-9-]{36}$/.test(taskId)) throw new Error('taskId无效');
+    if (typeof taskId !== 'string' || !/^[a-f0-9-]{36}$/.test(taskId)) throw new Error('Invalid taskId');
     return JSON.parse(await fs.readFile(path.join(this.stateDir, 'tasks', taskId, 'task.json'), 'utf8'));
   }
 
@@ -564,7 +564,7 @@ export class GoFlow {
     if (!usage) usage = await this.quota.cached();
     const resetTimes = (decision?.windows ?? usage?.quota?.windows ?? []).filter(window => window.percent >= 95 || window.status === 'rate-limited')
       .map(window => window.resetAt).filter(Boolean).sort();
-    record.status = 'queued'; record.reason = 'OpenCode Go暂不具备安全执行条件；任务排队，未自动转移给GPT或付费provider';
+    record.status = 'queued'; record.reason = 'OpenCode Go cannot currently execute safely; task queued without automatic transfer to GPT or a paid provider';
     record.queue = { channel: 'opencode-go', reason: String(reason ?? 'quota_unknown'), category: queueCategory(String(reason ?? 'quota_unknown')),
       queuedAt: record.queue?.queuedAt ?? iso(), updatedAt: iso(), retryAt: usage?.retryAt ?? resetTimes[0] ?? null,
       queryFailureReason: usage?.queryFailureReason ?? decision?.queryFailureReason ?? null,
@@ -591,23 +591,23 @@ export class GoFlow {
     }
     if (!billingConfirmed(cfg)) {
       if (existingRecord) return this.defer(record, 'billing_confirmation_required');
-      record.status = 'billing_blocked'; record.reason = '活动Go订阅及账户Use balance关闭尚未同时由用户确认；未发起Go推理';
+      record.status = 'billing_blocked'; record.reason = 'The user has not confirmed both an active Go subscription and Use balance off; no Go inference started';
       await this.saveTask(record); await this.log({ type: 'billing_blocked', taskId, at: iso() }); return record;
     }
     try {
-      if (typeof request.task !== 'string' || !request.task.trim() || request.task.length > 20_000) throw new Error('任务描述无效或过长');
-      if (!['low', 'normal', 'high'].includes(record.priority)) throw new Error('priority必须是low、normal或high');
-      if (KEY_PATTERN.test(request.task)) throw new Error('任务描述含疑似凭据，拒绝推理');
+      if (typeof request.task !== 'string' || !request.task.trim() || request.task.length > 20_000) throw new Error('Task description is invalid or too long');
+      if (!['low', 'normal', 'high'].includes(record.priority)) throw new Error('priority must be low, normal, or high');
+      if (KEY_PATTERN.test(request.task)) throw new Error('Task description contains suspected credentials; inference refused');
       requireExecutable(cfg.opencodeExe, 'OpenCode'); requireExecutable(cfg.gitExe, 'Git');
       const tests = this.validateTests(request.tests, cfg);
       const files = uniqueFiles(request.files), editable = uniqueFiles(request.editableFiles);
-      if (!editable.length) throw new Error('必须声明editableFiles');
-      if (typeof request.directory !== 'string' || !path.isAbsolute(request.directory)) throw new Error('directory必须是绝对项目路径');
+      if (!editable.length) throw new Error('editableFiles must be declared');
+      if (typeof request.directory !== 'string' || !path.isAbsolute(request.directory)) throw new Error('directory must be an absolute project path');
       const originalDirectory = path.resolve(request.directory);
-      if ((await fs.lstat(originalDirectory)).isSymbolicLink()) throw new Error('项目目录不能是符号链接或junction');
+      if ((await fs.lstat(originalDirectory)).isSymbolicLink()) throw new Error('Project directory cannot be a symbolic link or junction');
       const realDirectory = await fs.realpath(originalDirectory);
-      if (realDirectory.toLowerCase() !== originalDirectory.toLowerCase()) throw new Error('项目路径包含符号链接或junction');
-      if (!(await fs.stat(realDirectory)).isDirectory()) throw new Error('项目目录不存在');
+      if (realDirectory.toLowerCase() !== originalDirectory.toLowerCase()) throw new Error('Project path contains a symbolic link or junction');
+      if (!(await fs.stat(realDirectory)).isDirectory()) throw new Error('Project directory does not exist');
       record.originalDirectory = realDirectory;
       record.files = files; record.editableFiles = editable; record.tests = tests;
       const context = [], originals = {};
@@ -622,14 +622,14 @@ export class GoFlow {
         let content = null;
         try {
           const st = await fs.stat(target);
-          if (st.size > cfg.maxFileBytes) throw new Error(`文件超出大小限制: ${name}`);
-          if (!files.includes(name)) throw new Error('已存在的editableFile必须同时列入files显式上下文');
+          if (st.size > cfg.maxFileBytes) throw new Error(`File exceeds the size limit: ${name}`);
+          if (!files.includes(name)) throw new Error('An existing editableFile must also be explicitly included in files');
           const buffer = await fs.readFile(target);
-          if (buffer.includes(0)) throw new Error('不允许二进制文件');
+          if (buffer.includes(0)) throw new Error('Binary files are not allowed');
           content = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-          if (KEY_PATTERN.test(content)) throw new Error('上下文含疑似凭据，已阻止上传');
+          if (KEY_PATTERN.test(content)) throw new Error('Context contains suspected credentials; upload blocked');
           bytes += buffer.length;
-          if (bytes > cfg.maxContextBytes) throw new Error('上下文总大小超限');
+          if (bytes > cfg.maxContextBytes) throw new Error('Total context size limit exceeded');
           originals[name] = { existed: true, hash: hash(buffer), size: buffer.length };
         } catch (error) {
           if (error.code !== 'ENOENT') throw error;
@@ -640,7 +640,7 @@ export class GoFlow {
       }
       if (existingRecord?.originals) {
         for (const [name, original] of Object.entries(existingRecord.originals)) {
-          if (originals[name]?.existed !== original.existed || originals[name]?.hash !== original.hash) throw new Error(`排队期间原项目文件发生冲突: ${name}`);
+          if (originals[name]?.existed !== original.existed || originals[name]?.hash !== original.hash) throw new Error(`Original project file conflict while queued: ${name}`);
         }
       }
       record.originals = originals;
@@ -650,7 +650,7 @@ export class GoFlow {
         risk: request.risk, complexity: request.complexity, ...(request.mode ? { mode: request.mode } : {}), priority: record.priority };
       const { mode: routeMode, ...immutableRequest } = persistedRequest;
       const requestHash = hash(JSON.stringify(immutableRequest));
-      if (existingRecord?.requestHash && existingRecord.requestHash !== requestHash) throw new Error('排队任务请求发生变更，拒绝恢复另一个请求');
+      if (existingRecord?.requestHash && existingRecord.requestHash !== requestHash) throw new Error('Queued task request changed; refusing to resume a different request');
       record.requestHash = requestHash;
       await atomicJson(path.join(taskDir, 'request.json'), { request: persistedRequest, requestHash });
       const runId = randomUUID();
@@ -668,7 +668,7 @@ export class GoFlow {
       await this.git(cfg, ['-c', 'user.name=GoFlow', '-c', 'user.email=goflow@localhost', 'commit', '--quiet', '--allow-empty', '-m', 'GoFlow isolated input snapshot'], workdir, configDir);
       const catalog = await this.models();
       const stableModels = catalog.models.filter(m => !/preview|experimental|alpha|beta|\btest\b|[-_]exp(?:[-_]|$)/i.test(m));
-      if (!stableModels.length) throw new Error('Go实际模型列表仅含实验模型，保留给GPT处理');
+      if (!stableModels.length) throw new Error('The actual Go catalog contains only experimental models; retain the task for GPT');
       const preference = Array.isArray(cfg.modelPreference) ? cfg.modelPreference : [];
       if (existingRecord?.model && !stableModels.includes(existingRecord.model)) return this.defer(record, 'unknown_model_coverage');
       record.model = existingRecord?.model ?? (stableModels.includes(cfg.selectedModel) ? cfg.selectedModel : undefined)
@@ -736,10 +736,10 @@ export class GoFlow {
         }
         let failure;
         try {
-          if (execution.code !== 0 || execution.timedOut || execution.outputLimit) throw new Error(`OpenCode执行失败 exit=${execution.code}; timeout=${!!execution.timedOut}; ${redact(execution.stderr).slice(0, 1500)}`);
+          if (execution.code !== 0 || execution.timedOut || execution.outputLimit) throw new Error(`OpenCode execution failed exit=${execution.code}; timeout=${!!execution.timedOut}; ${redact(execution.stderr).slice(0, 1500)}`);
           if (parsed.errors.length) throw new Error(redact(parsed.errors.join('; ')).slice(0, 1500));
-          if (parsed.actions.length) throw new Error('Go模型尝试使用工具；违反无工具隔离策略');
-          if (parsed.models.some(m => m !== record.model)) throw new Error('事件流模型/provider与allowlist不符');
+          if (parsed.actions.length) throw new Error('Go model attempted tool use, violating the tool-free isolation policy');
+          if (parsed.models.some(m => m !== record.model)) throw new Error('Event-stream model/provider does not match the allowlist');
           const output = strictFiles(parsed.text, editable, cfg.maxFileBytes, cfg.maxContextBytes);
           screenTestCode([...context.filter(e => !output.some(o => o.path === e.path)), ...output]);
           // Restore pristine declared input for each attempt before applying JSON output.
@@ -764,7 +764,7 @@ export class GoFlow {
               tested = await this.runner(test.command, args, { cwd: workdir, env: cleanEnvironment(),
                 timeoutMs: cfg.testTimeoutMs, maxOutputBytes: 200_000, purpose: 'test' });
             } catch {
-              const error = new Error('本地测试执行环境异常，未证明模型代码失败');
+              const error = new Error('Local test environment failure does not demonstrate a model code failure');
               error.failureCategory = 'verification_environment'; throw error;
             }
             const lastCount = label => {
@@ -793,19 +793,19 @@ export class GoFlow {
             if (tested.code === null || tested.timedOut || tested.outputLimit || testCount === null || passCount === null || failedCount === null) {
               testEvidence.failureCategory = 'verification_environment';
               await atomicJson(path.join(taskDir, `attempt-${attempt + 1}-test-${index + 1}.json`), testEvidence);
-              const error = new Error('本地测试执行或TAP报告格式异常，未证明模型代码失败');
+              const error = new Error('Local test execution or TAP format failure does not demonstrate a model code failure');
               error.failureCategory = 'verification_environment'; throw error;
             }
-            if (!testEvidence.passed) throw new Error(`测试${index + 1}失败 exit=${tested.code}\n${redact(tested.stdout).slice(-6000)}\n${redact(tested.stderr).slice(-3000)}`);
+            if (!testEvidence.passed) throw new Error(`Test ${index + 1} failed exit=${tested.code}\n${redact(tested.stdout).slice(-6000)}\n${redact(tested.stderr).slice(-3000)}`);
           }
           for (const entry of output) {
             const current = await fs.readFile(await safePath(workdir, entry.path));
-            if (hash(current) !== candidateHashes[entry.path]) throw new Error('测试修改了交付文件，必须由GPT检查');
+            if (hash(current) !== candidateHashes[entry.path]) throw new Error('Tests modified an output file; GPT review required');
           }
           // Context files outside editableFiles must remain exactly at the snapshot.
           for (const name of files.filter(n => !editable.includes(n))) {
             const current = await fs.readFile(await safePath(workdir, name));
-            if (hash(current) !== originals[name].hash) throw new Error('测试改动了未声明可编辑文件');
+            if (hash(current) !== originals[name].hash) throw new Error('Tests modified a file not declared editable');
           }
           await this.git(cfg, ['add', '--', ...output.map(e => e.path)], workdir, configDir);
           const diff = await this.git(cfg, ['diff', '--cached', '--no-ext-diff', '--no-textconv', '--'], workdir, configDir);
@@ -827,11 +827,11 @@ export class GoFlow {
         evidence.failureCategory = 'capability'; record.capabilityFailures++; record.lastCapabilityFailure = failure;
         await this.saveTask(record); await this.log({ type: 'attempt_failed', taskId, attempt: attempt + 1, model: record.model, failure, at: iso() });
         if (execution.code !== 0 || parsed.errors.length || execution.timedOut || execution.outputLimit || parsed.actions.length || parsed.models.some(m => m !== record.model)
-          || /疑似凭据|动态执行|外部I\/O|未准许模块|动态require/.test(failure)) break;
+          || /suspected credentials|dynamic execution|external I\/O|unapproved module|dynamic require|疑似凭据|动态执行|外部I\/O|未准许模块|动态require/.test(failure)) break;
         // A concrete parser/process/test failure is the only reason for a repair call.
         repair = `\nPrevious attempt failed verification. Correct this specific evidence while preserving all original requirements:\n${failure}\nReturn a complete replacement JSON response using the original supplied context.`;
       }
-      record.status = 'escalation_required'; record.reason = 'Go首次尝试及最多两次有依据修复仍失败；交由当前GPT主智能体继续';
+      record.status = 'escalation_required'; record.reason = 'Go failed after the first attempt and up to two evidence-based repairs; the current GPT agent must continue';
     } catch (error) { record.status = 'blocked'; record.reason = redact(error.message); }
     await this.saveTask(record); await this.log({ type: record.status, taskId, reason: record.reason, at: iso() });
     return record;
@@ -839,28 +839,28 @@ export class GoFlow {
 
   async accept(taskId, { reviewer = 'GPT', reviewSummary } = {}) {
     const record = await this.task(taskId);
-    if (record.status !== 'review_required' || !record.testPassedAt || !record.attempts.at(-1)?.passed) throw new Error('仅允许接收测试已通过且等待审核的任务');
-    if (reviewer !== 'GPT' || typeof reviewSummary !== 'string' || reviewSummary.trim().length < 12) throw new Error('必须记录GPT审核结论（至少12字符）');
-    if (KEY_PATTERN.test(reviewSummary)) throw new Error('审核结论含疑似凭据');
+    if (record.status !== 'review_required' || !record.testPassedAt || !record.attempts.at(-1)?.passed) throw new Error('Only tasks with passing tests and pending review can be accepted');
+    if (reviewer !== 'GPT' || typeof reviewSummary !== 'string' || reviewSummary.trim().length < 12) throw new Error('Record a GPT review conclusion of at least 12 characters');
+    if (KEY_PATTERN.test(reviewSummary)) throw new Error('Review conclusion contains suspected credentials');
     const lock = path.join(this.stateDir, 'accept.lock');
     await fs.mkdir(this.stateDir, { recursive: true });
     const ownership = await acquireOwnedLock(lock);
     try {
       const real = await fs.realpath(record.originalDirectory);
-      if (real.toLowerCase() !== record.originalDirectory.toLowerCase()) throw new Error('原项目路径已改变');
+      if (real.toLowerCase() !== record.originalDirectory.toLowerCase()) throw new Error('Original project path changed');
       // Check all declared input hashes, so acceptance cannot silently use stale context.
       for (const [name, original] of Object.entries(record.originals)) {
         const target = await safePath(real, name, { missing: !original.existed });
         try {
           const current = await fs.readFile(target);
-          if (!original.existed || hash(current) !== original.hash) throw new Error(`原项目文件发生冲突: ${name}`);
+          if (!original.existed || hash(current) !== original.hash) throw new Error(`Original project file conflict: ${name}`);
         } catch (error) { if (error.code !== 'ENOENT' || original.existed) throw error; }
       }
       const writes = [];
       for (const output of record.outputFiles) {
-        if (!record.editableFiles.includes(output.path)) throw new Error('交付元数据含未授权文件');
+        if (!record.editableFiles.includes(output.path)) throw new Error('Output metadata contains an unauthorized file');
         const content = await fs.readFile(await safePath(record.workdir, output.path));
-        if (hash(content) !== output.hash) throw new Error('交付文件在测试后发生变更，需要重新测试');
+        if (hash(content) !== output.hash) throw new Error('Output file changed after testing; retesting is required');
         const target = await safePath(real, output.path, { missing: true });
         const original = record.originals[output.path];
         const previous = original.existed ? await fs.readFile(target) : null;
@@ -883,7 +883,7 @@ export class GoFlow {
         for (const write of completed.reverse()) {
           if (write.previous === null) await fs.unlink(write.target); else await fs.writeFile(write.target, write.previous);
         }
-        throw new Error(`应用失败，已还原完成写入的文件: ${redact(error.message)}`);
+        throw new Error(`Apply failed; completed writes have been restored: ${redact(error.message)}`);
       } finally {
         for (const temporary of createdTemps) {
           try { await fs.unlink(temporary); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -898,7 +898,7 @@ export class GoFlow {
 
   async discard(taskId) {
     const record = await this.task(taskId);
-    if (record.status === 'accepted' || record.status === 'running') throw new Error('不能丢弃已接收或正在执行的任务');
+    if (record.status === 'accepted' || record.status === 'running') throw new Error('Accepted or running tasks cannot be discarded');
     record.status = 'discarded'; record.discardedAt = iso();
     await this.saveTask(record); await this.log({ type: 'discarded', taskId, at: iso() });
     return record;

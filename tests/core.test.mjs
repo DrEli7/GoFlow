@@ -264,7 +264,7 @@ test('[SIMULATED MODEL] catalog filters providers dynamically and never uses a p
 
 test('[SIMULATED MODEL] catalog containing only other providers fails closed', async t => {
   const f = setup(t, undefined, { models: ['openai/paid-model', 'opencode/free-model'] });
-  await assert.rejects(f.flow.models(), /没有实际可用|provider/);
+  await assert.rejects(f.flow.models(), /No OpenCode Go models|provider/);
   const record = await f.flow.submit(f.request);
   assert.equal(record.status, 'blocked');
   assert.equal(f.simulation.inferenceCalls().length, 0);
@@ -275,7 +275,7 @@ test('[SIMULATED MODEL] a CLI version outside the audited version stops before i
   const f = setup(t, undefined, { version: '9.9.9-unaudited-fixture' });
   const record = await f.flow.submit(f.request);
   assert.equal(record.status, 'blocked');
-  assert.match(record.reason, /版本.*审查|1\.18\.15/);
+  assert.match(record.reason, /version.*reviewed|1\.18\.15/);
   assert.equal(f.simulation.calls.filter(c => c.purpose === 'version').length, 1);
   assert.equal(f.simulation.inferenceCalls().length, 0);
   assert.equal(f.readSource(), ORIGINAL);
@@ -306,7 +306,7 @@ test('[SIMULATED MODEL] wellknown, unknown, malformed, or non-Go auth metadata b
     'not a validated metadata format',
   ]) {
     const f = setup(t, undefined, { authMetadata });
-    await assert.rejects(f.flow.models(), /元数据|wellknown|remote|provider/);
+    await assert.rejects(f.flow.models(), /metadata|wellknown|remote|provider/);
     const record = await f.flow.submit(f.request);
     assert.equal(record.status, 'blocked', record.reason);
     assert.equal(f.simulation.calls.filter(c => c.purpose === 'models').length, 0);
@@ -342,7 +342,7 @@ test('[SIMULATED MODEL] two repairs are capped at three total attempts and escal
     assert.notEqual(attempt.tests[0].exitCode, 0);
     assert.equal(attempt.tests[0].passed, false);
     assert.match(attempt.tests[0].stdout, /AssertionError|ERR_ASSERTION/);
-    assert.match(attempt.failure, /测试.*失败/);
+    assert.match(attempt.failure, /Test.*failed/);
   }
   const calls = f.simulation.inferenceCalls();
   assert.match(calls[1].input, /Previous attempt failed verification/);
@@ -417,14 +417,14 @@ test('[SIMULATED MODEL] acceptance requires GPT reviewer and a substantive revie
   assert.equal(accepted.review.reviewer, 'GPT');
   assert.equal(accepted.review.summary, REVIEW.reviewSummary);
   assert.equal(f.readSource(), CORRECT);
-  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /仅允许/);
+  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /Only tasks/);
 });
 
 test('[SIMULATED MODEL] changed original source prevents application and preserves the new source', async t => {
   const f = await passingProposal(t);
   const changed = 'export function add(a, b) { return a + b + 100; }\n';
   write(path.join(f.directory, SOURCE), changed);
-  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /冲突|发生/);
+  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /conflict|changed/);
   assert.equal(f.readSource(), changed);
   assert.equal((await f.flow.task(f.record.taskId)).status, 'review_required');
 });
@@ -434,7 +434,7 @@ test('[SIMULATED MODEL] failed exclusive temporary-file creation preserves the e
   const temporary = `${path.join(f.directory, SOURCE)}.goflow-${f.record.taskId}.tmp`;
   const sentinel = 'existing temporary file belongs to a concurrent writer\n';
   write(temporary, sentinel);
-  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /应用失败|EEXIST/);
+  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /Apply failed|EEXIST/);
   assert.equal(fs.readFileSync(temporary, 'utf8'), sentinel, 'cleanup cannot delete a file it failed to create');
   assert.equal(f.readSource(), ORIGINAL);
   assert.equal((await f.flow.task(f.record.taskId)).status, 'review_required');
@@ -443,14 +443,14 @@ test('[SIMULATED MODEL] failed exclusive temporary-file creation preserves the e
 test('[SIMULATED MODEL] changed context prevents application even when the editable source is unchanged', async t => {
   const f = await passingProposal(t);
   fs.appendFileSync(path.join(f.directory, PROJECT_TEST), '// concurrent context edit\n');
-  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /冲突|发生/);
+  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /conflict|changed/);
   assert.equal(f.readSource(), ORIGINAL);
 });
 
 test('[SIMULATED MODEL] changing a candidate after tests invalidates acceptance', async t => {
   const f = await passingProposal(t);
   write(path.join(f.record.workdir, SOURCE), WRONG);
-  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /测试后发生变更|重新测试/);
+  await assert.rejects(f.flow.accept(f.record.taskId, REVIEW), /changed after testing|retesting/);
   assert.equal(f.readSource(), ORIGINAL);
 });
 
@@ -469,9 +469,9 @@ test('[SIMULATED MODEL] missing existing-input declarations explain new-file pla
   for (const missing of ['src/new-deliverable.mjs', 'new-package/new-deliverable.mjs']) {
     const record = await f.flow.submit({ ...f.request, files: [missing, PROJECT_TEST], editableFiles: [missing] });
     assert.equal(record.status, 'blocked', record.reason);
-    assert.match(record.reason, /输入文件不存在/);
+    assert.match(record.reason, /Input file does not exist/);
     assert.ok(record.reason.includes(missing));
-    assert.match(record.reason, /仅列入editableFiles/);
+    assert.match(record.reason, /only in editableFiles/);
     assert.match(record.reason, /files: \[\]/);
     assert.deepEqual(record.attempts, []);
     assert.equal(fs.existsSync(path.join(f.directory, missing)), false, 'diagnostics never create placeholders');
@@ -517,11 +517,11 @@ test('[SIMULATED MODEL] real junction/symlink and hard-linked inputs are rejecte
   catch (error) { if (['EPERM', 'EACCES', 'ENOTSUP'].includes(error.code)) return t.skip(`OS cannot create test symlink: ${error.code}`); throw error; }
   const linked = await f.flow.submit({ ...f.request, files: ['linked/outside.mjs', PROJECT_TEST], editableFiles: ['linked/outside.mjs'] });
   assert.equal(linked.status, 'blocked', linked.reason);
-  assert.match(linked.reason, /链接|junction/);
+  assert.match(linked.reason, /link|junction/);
   fs.linkSync(path.join(f.directory, SOURCE), path.join(f.directory, 'src/hard.mjs'));
   const hard = await f.flow.submit({ ...f.request, files: ['src/hard.mjs', PROJECT_TEST], editableFiles: ['src/hard.mjs'] });
   assert.equal(hard.status, 'blocked', hard.reason);
-  assert.match(hard.reason, /硬链接/);
+  assert.match(hard.reason, /Hard-linked/);
   assert.equal(f.simulation.inferenceCalls().length, 0);
 });
 
@@ -535,7 +535,7 @@ test('[SIMULATED MODEL] model attempts to edit undeclared or traversing files ca
   const g = setup(t, { config: { maxRepairAttempts: 0 } }, { response: () => ({ files: [{ path: PROJECT_TEST, content: '// unauthorized' }] }) });
   const undeclared = await g.flow.submit(g.request);
   assert.equal(undeclared.status, 'escalation_required');
-  assert.match(undeclared.attempts[0].failure, /未声明/);
+  assert.match(undeclared.attempts[0].failure, /undeclared/);
   assert.equal(g.readSource(), ORIGINAL);
 });
 
@@ -605,7 +605,7 @@ test('[SIMULATED MODEL] concurrent tasks on one source use distinct real snapsho
   assert.equal(fs.readFileSync(path.join(second.workdir, SOURCE), 'utf8'), CORRECT);
   assert.equal(f.readSource(), ORIGINAL);
   await f.flow.accept(first.taskId, REVIEW);
-  await assert.rejects(f.flow.accept(second.taskId, REVIEW), /冲突/);
+  await assert.rejects(f.flow.accept(second.taskId, REVIEW), /conflict/);
   assert.equal(f.readSource(), CORRECT);
 });
 
@@ -698,7 +698,7 @@ test('[SIMULATED QUOTA] 95-percent one-task CLI permit allows one request but ca
 test('[SIMULATED QUOTA] queued source conflicts and manual stable model selection preserve original requirements', async t => {
   const f=setup(t,undefined,undefined,{percent:95});const queued=await f.flow.submit(f.request);
   write(path.join(f.directory,SOURCE),CORRECT);f.quotaState.percent=0;
-  const conflict=await f.flow.resume(queued.taskId);assert.equal(conflict.status,'blocked');assert.match(conflict.reason,/冲突/);
+  const conflict=await f.flow.resume(queued.taskId);assert.equal(conflict.status,'blocked');assert.match(conflict.reason,/conflict/);
   assert.equal(f.simulation.inferenceCalls().length,0);assert.equal(f.readSource(),CORRECT);
   await assert.rejects(f.flow.selectModel('openai/paid-model'));
   const selection=await f.flow.selectModel(VALID_MODELS[0]);assert.equal(selection.channel,'opencode-go');assert.equal(selection.gptModelChanged,false);
@@ -721,7 +721,7 @@ test('[SIMULATED QUOTA] real dead-owner resume and accept locks recover; a live 
   const live=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{windowsHide:true,stdio:'ignore'});
   t.after(()=>live.kill());
   const liveLock=path.join(g.stateDir,'tasks',held.taskId,'resume.lock');const owner={id:'SIMULATED-live-owner',pid:live.pid,createdAt:new Date().toISOString()};write(liveLock,JSON.stringify(owner));
-  await assert.rejects(g.flow.resume(held.taskId),/持有.*锁/);assert.deepEqual(JSON.parse(fs.readFileSync(liveLock,'utf8')),owner);
+  await assert.rejects(g.flow.resume(held.taskId),/holds.*lock/);assert.deepEqual(JSON.parse(fs.readFileSync(liveLock,'utf8')),owner);
   assert.equal(g.simulation.inferenceCalls().length,0);
 });
 

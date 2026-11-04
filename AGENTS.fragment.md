@@ -1,34 +1,33 @@
 <!-- GOFLOW BEGIN v1 -->
-## GoFlow 默认本地协作规则
+## Default local GoFlow collaboration rules
 
-本地代码任务默认使用 GoFlow：当前 ChatGPT 订阅登录的 Codex GPT 为主智能体。开始代码任务时读取全局 `goflow` 技能并调用用户级 MCP `goflow_status`，据需求评估复杂度/风险后使用 `goflow_route`。清晰、低风险的重复修改、测试编写和普通局部功能优先通过 `goflow_submit` 交给 OpenCode Go；架构、复杂算法、关键安全、生产系统、破坏性或范围不明确的工作留给 GPT。非代码任务不需要调用 GoFlow。
+Use GoFlow for local coding tasks. Codex GPT signed in with the current ChatGPT subscription is the lead agent. Read the global `goflow` skill and call the user-level `goflow_status`, assess complexity/risk, then use `goflow_route`. Prefer `goflow_submit` for clear, low-risk repetitive edits, test writing, and ordinary local features. Keep architecture, complex algorithms, critical security, production systems, destructive work, and unclear scope with GPT. Noncoding work does not require GoFlow.
 
-严格仅使用实际 `opencode models opencode-go` 列表中的 Go 模型，不能自动使用按量 API 或其他 provider。收费保护未确认、服务缺失/禁用、平台或配置隔离不支持时停止 Go 推理，GPT 继续可完成工作并明确报告。用户未确认 Go 订阅有效且 Go 控制台 Use balance 关闭前，不得开启 billing guard；本地确认不等于逐请求账单保证。保留现有 ChatGPT 登录和权限设置，不读取/显示/复制凭据。
+Use only models returned by the actual `opencode models opencode-go` catalog, never an automatic metered API or provider fallback. Stop Go inference if billing protection is unconfirmed, the service is unavailable/disabled, or platform/configuration isolation is unsupported; GPT may continue independent work and must report the limitation. Do not enable the billing guard until the user confirms an active Go subscription and Use balance off. Local confirmation is not a per-request billing guarantee. Preserve existing ChatGPT login and permissions; do not read, display, or copy credentials.
 
-每个 Go 任务只发送明确选定且不含凭据的文件，在独立快照中执行；主智能体、其他执行者与原工作树不得并发写同一文件。Go 首次失败之后最多两次有依据的修复；再失败由当前 GPT接手，不重复开新 Go 任务规避上限。测试成功仍需 GPT 审核实际代码、需求覆盖与测试日志，然后 `goflow_accept` 校验原文件哈希并应用允许的补丁。目前桥接器自动测试支持 Node 内置测试；其他栈交 GPT 运行所需测试，保持原任务要求。完整记录模型来源、失败原因、修复次数、测试和审核证据。
+Send only explicitly selected credential-free files and execute in an independent snapshot. The lead agent, other workers, and original working tree must not write the same files concurrently. After the first Go failure, allow at most two evidence-based repairs, then let the current GPT take over; do not create new tasks to evade the limit. GPT must review actual code, requirement coverage, and test logs even when tests pass, then use `goflow_accept` to verify original hashes and apply allowed changes. Automatic bridge tests currently support Node's built-in runner; GPT performs required testing for other stacks without reducing requirements. Record model source, failure reasons, repair count, tests, and review evidence.
 
-自然语言模式：「关闭自动委派」= off，「强制 GPT」= gpt，「强制 Go」= go，「恢复自动模式」= auto。用户只要求本轮临时模式时不要改全局设置。force Go 不绕过高风险/收费/测试/审核。消耗来源明确区分 OpenCode Go 与 ChatGPT/Codex，不能为节省额度降低要求。后续项目规则和用户指令按正常优先级处理。
+Natural-language modes: “disable automatic delegation” = off, “force GPT” = gpt, “force Go” = go, “restore automatic mode” = auto. A temporary request must not alter the global mode. Force Go cannot bypass risk, billing, tests, or review. Distinguish OpenCode Go usage from ChatGPT/Codex subscription usage; do not lower quality to save quota. Apply later project rules and user instructions with their normal precedence.
 <!-- GOFLOW END v1 -->
 
 <!-- GOFLOW QUOTA BEGIN v1.1 -->
-## GoFlow V1.1 额度与账户补充规则
+## GoFlow V1.1 quota and account rules
 
-本补充保留上面的分工、质量、隔离、测试、审核和修复上限。在本地代码任务开始时，使用 `goflow_usage` 查询共享额度（约60秒缓存）并按需查看 `goflow_queue`；每次Go请求由桥接器在跨项目共享锁及执行许可下复查额度。状态命令只返回最近快照，不能把缓存或估算当作实时官方账单。
+Retain the collaboration, quality, isolation, tests, review, and repair limits above. At coding-task start, query shared quota with `goflow_usage` (approximately 60-second cache), and inspect `goflow_queue` as needed. Before each Go request, the bridge rechecks quota under a cross-project lock and execution lease. Status returns the latest snapshot, not a live official bill.
 
-对所有可可靠识别窗口，已用比例低于80%正常；达到80%提醒，质量达标前提下考虑低消耗模型；达到95%停止新Go请求并排队，只有用户明确为具体任务临时授权才允许一次Go订阅请求；100%或官方rate-limited始终停止，不能用临时授权绕过。额度不足、额度未知、授权失败和服务故障不计作模型能力不足，不默认把大量简单任务升级给高级GPT，也不切换其它付费API。用户明确选择GPT时说明消耗当前ChatGPT/Codex订阅。
+For every reliably identified window: below 80% is normal; at 80%, warn and consider a lower-consumption model only if quality is maintained; at 95%, stop new requests and queue unless the user explicitly permits one subscription request for that task; at 100% or an official rate limit, always stop. Quota shortage/uncertainty, authorization failures, and service failures are not model-capability failures. Do not silently move large batches to advanced GPT or another paid API. An explicit GPT choice uses the current ChatGPT/Codex subscription.
 
-额度接口的三个窗口是实际账户数据，不是每模型独立钱包。模型必须来自真实 `opencode-go/*` 目录；模型权重、能力或剩余额度无法确认时，明确说明未知，不能假设无限或伪造成功率/成本。保留全部功能和必要测试。
+The three API windows are shared account data, not separate model wallets. Models must be in the real `opencode-go/*` catalog. Unverified model weights, capability, or remaining quota must remain unknown; do not assume unlimited use or invent success rates/costs. Preserve all functions and necessary tests.
 
-额度重置或服务恢复后，通过任务触发的新查询恢复许可；按当前项目和原授权检查待执行任务并 `goflow_resume`，继续同一任务ID及已有修复次数。没有自动改账户设置、无持续高占用后台进程、无隐含跨项目应用。用户可以随时关闭GoFlow、切换Go模型或恢复GPT工作。
+After quota reset or service recovery, a task-triggered fresh query may restore permission. Check the project and original authorization, then `goflow_resume` the same task ID with its existing repair count. Do not automatically change account settings, run continuous heavy polling, or apply changes across projects implicitly. The user can disable GoFlow, change the Go model, or return to GPT at any time.
 
-V1.1仅允许受信本地私有helper在内存复用现有Go凭据，对固定官方HTTPS额度接口做Bearer GET；密钥不得进入模型上下文、MCP参数、源码、普通配置、日志或备份。新输入只能由本人走官方本地授权或终端隐藏输入，GoFlow新持久化采用Windows Credential Manager。不得提取ChatGPT令牌/浏览器Cookie。额度缓存与实际Go推理凭据绑定，切换凭据立即失效；quota成功不等于Use balance已关闭，原费用保护继续有效。
+V1.1 permits only the trusted private local helper to reuse existing Go credentials in memory for a bearer GET to the fixed official HTTPS quota endpoint. Keys must never enter model context, MCP arguments, source, ordinary configuration, logs, or backups. New input comes from the owner through official local authorization or hidden terminal input; new GoFlow persistence uses Windows Credential Manager. Never extract ChatGPT tokens or browser cookies. Bind the quota cache to the actual inference credentials and invalidate it on changes. Successful quota retrieval does not establish that Use balance is off; billing protection remains mandatory.
 <!-- GOFLOW QUOTA END v1.1 -->
 
-
 <!-- GOFLOW DESKTOP BEGIN v1.1.2 -->
-## GoFlow 本地桌面默认入口
+## Default local desktop entry point
 
-本机本地代码聊天自动读取全局goflow技能并执行上述分工，不需要重复提示词。正式工具可用时，每个操作选择用户goflow或已安装插件goflow_plugin中的一个入口。旧聊天工具目录缺少GoFlow、但用户服务注册确实存在启用时，通过已安装runtime的scripts/client.mjs调用同一个GoFlow MCP；不是裸OpenCode或其它付费API。默认用户目录的代码任务先用该入口检查status，再使用usage、route，保留原有隔离、测试、GPT审核/accept与修复上限。
+Local coding chats load the global goflow skill and follow these rules without repeated prompting. When official tools are available, choose either the user goflow entry point or the installed goflow_plugin entry point for each operation. If an older chat lacks discovered tools but the registered user service is enabled, use the installed runtime's `scripts/client.mjs` to call that same MCP service, never bare OpenCode or another paid API. Under the default user directory, check status through this entry point, then usage and route; preserve isolation, tests, GPT review/accept, and repair limits.
 
-客户端拒绝服务/插件/工具的明确禁用、项目覆盖命令或不匹配路径；不绕过收费、权限和额度保护。非默认CODEX_HOME下不使用此备用入口，正式MCP不可用则按原规则停止Go调用。非代码聊天不用GoFlow。
+The client rejects explicitly disabled services/plugins/tools, project command overrides, and mismatched paths. It does not bypass billing, permissions, or quota. Do not use this fallback with a nondefault CODEX_HOME; if official MCP is unavailable, stop Go calls under the existing rules. Noncoding chat does not use GoFlow.
 <!-- GOFLOW DESKTOP END v1.1.2 -->

@@ -1,38 +1,38 @@
-# 验证范围
+# Verification scope
 
-这份 GitHub 源码副本经过独立验证，不包含本地账户记录、任务数据库、密钥、配置备份或研究克隆。
+This GitHub source export was independently checked without publishing local account records, task databases, keys, configuration backups, or research clones. The results below are historical release evidence, not new claims created by the English documentation revision.
 
-## 离线控制与安全检查
+## Offline controls and security checks
 
-在 Windows、Node.js 24、Python 3.13 上执行：
+The original Windows, Node.js 24, Python 3.13 run recorded:
 
-- Node 控制、额度及 MCP 测试：63 项通过，0 失败、0 跳过。
-- Python 私有额度 helper：11 项通过。认证、HTTP、缺失授权和异常响应均由假数据替换，没有读取真实账户。
-- 额外假凭据回显、非法日期及百分比边界审查通过。
+- 63 passing Node control, quota, and MCP tests; no failures or skips.
+- 11 passing private Python quota-helper tests. Authentication, HTTP, missing authorization, and unusual responses used fake data without reading a real account.
+- Additional fake-credential echo, invalid-date, and percentage-boundary review.
 
-Git、独立文件快照、Node 代码测试、跨进程锁、孤立 worker 和 stdio 通信真实执行。离线测试不会启动实际 OpenCode 推理或访问额度接口。
+Git, independent snapshots, Node tests, cross-process locks, isolated workers, and stdio communication ran for real. Offline checks did not start actual OpenCode inference or contact the quota endpoint.
 
-## 上传版安装检查
+## Exported installer checks
 
-在独立临时 Codex 用户目录完成 15 项实际检查，包括依赖自动发现、首次费用确认关闭、配置派生、重复安装保留设置、不重复注册、新进程状态、禁用、启用及撤销。
+Fifteen real checks ran under an independent temporary Codex user root, including dependency discovery, billing confirmations initially off, derived configuration, preservation on reinstall, no duplicate registrations, fresh-process status, disable, enable, and rollback.
 
-撤销后，临时目录原有 `config.toml` 与 `AGENTS.md` 字节完全一致。现有真实 Codex 配置、全局规则和 GoFlow 运行配置未改变。安装器同时发现过未经审查的另一份 OpenCode，并拒绝该版本；默认发现顺序现在优先使用 npm 官方安装中的原生 CLI，仍严格检查 1.18.15。
+After rollback, the original temporary `config.toml` and `AGENTS.md` bytes matched exactly. Actual Codex configuration, global rules, and GoFlow runtime settings were unchanged. The installer also found and rejected another unreviewed OpenCode version. Discovery now prefers the native CLI from the official npm installation while strictly requiring 1.18.15.
 
-## 实际 GoFlow 请求
+## Real GoFlow request
 
-通过已安装服务的真实 MCP stdio 执行 `status → usage → models → route → submit → accept`。独立 slugify 项目的基线测试先失败；实际 `opencode-go/deepseek-v4-flash` 首次生成补丁，约 13.21 秒，7 项独立测试全部通过，没有修复请求。
+The installed service's real MCP stdio completed `status → usage → models → route → submit → accept`. The independent slugify baseline failed first. Actual `opencode-go/deepseek-v4-flash` produced a first-attempt patch in about 13.21 seconds; all seven independent tests passed without a repair request.
 
-主 GPT 检查了完整候选代码、需求和测试结果后调用接收。原文件哈希被核验，只有声明的源码发生修改；原测试保持不变。应用后在原项目再次执行受限测试，7 项全部通过。`examples/slugify` 保存该纯代码示例，没有携带原项目 Git 数据或个人请求路径。
+GPT reviewed the complete candidate, requirements, and results before acceptance. Original hashes were checked and only the declared source changed; tests were unchanged. The applied project then passed all seven restricted tests. `examples/slugify` contains this source and its tests without the original Git history or personal request paths.
 
-当前会话没有直接暴露 GoFlow 工具名称，因此此项使用已注册服务的实际 stdio 协议验证；它证明桥接器和模型调用可用，不冒充当前会话已经自动加载工具目录。
+The validating session did not directly expose GoFlow tool names, so it used the registered service's actual stdio protocol. This proves the bridge/model path worked, not that the session had automatically refreshed tool discovery.
 
-## 仍保留的边界
+## Remaining boundaries
 
-- 没有执行电脑物理重启；新进程验证不能代替它。
-- Windows Credential Manager 的真实密钥写入没有测试：已有授权可用，无需创建新密钥副本。
-- 自动 Go 验证范围是自包含 JavaScript 和 Node 内置测试，其他栈需要 GPT 完成相应测试。
-- 本地锁和额度预检不是供应商服务端的额度预留，无法约束其他设备消费。
-- API 尚未正式稳定文档化；接口字段或授权无法确认时暂停 Go，而不构造准确余额。
-- 来源中的计价字段不能作为额外付款凭证；不会将模拟成功率或本地估算包装成官方账单数据。
+- No physical computer reboot was performed; fresh processes are not equivalent.
+- Real Windows Credential Manager key writing was not tested because existing authorization worked and no new key copy was needed.
+- Automatic Go verification covers self-contained JavaScript and Node built-in tests; GPT must run appropriate checks for other stacks.
+- Local locks and quota prechecks are not provider-side reservations and cannot constrain other devices.
+- The quota API is not formally stable/documented. Unconfirmed fields or authorization pause Go rather than inventing a precise balance.
+- Reported pricing fields are not proof of extra payment. Synthetic success rates and local estimates are not official bills.
 
-因此本仓库不宣称全部平台、全部框架或所有核心验收已经完成。
+The repository does not claim complete platform, framework, or security acceptance coverage.

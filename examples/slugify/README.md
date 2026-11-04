@@ -1,11 +1,11 @@
-# 已验收的 Go 补丁示例
+# Accepted Go patch example
 
-本示例的七项测试先由 GPT 编写。真实 OpenCode Go 首次生成实现，在独立快照中通过测试；GPT 审核后，通过 MCP 接收并再次验证。
+GPT wrote these seven tests first. A real OpenCode Go request generated the implementation on its first attempt and passed in an isolated snapshot. GPT reviewed it, accepted it through MCP, and verified the applied result.
 
-从此目录执行本地受限测试，不发起模型请求：
+Run the restricted local tests from this directory; this does not make a model request:
 
 ```powershell
 node --permission --allow-fs-read=. --test-isolation=none --test-reporter=tap --test test/slugify.test.mjs
 ```
 
-这里仅保留源码和测试，不包含原项目的 Git、任务 ID、用量、授权或个人路径。
+Only source and tests are included, without the original project's Git data, task ID, usage, authorization, or personal paths.

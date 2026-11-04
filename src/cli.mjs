@@ -11,7 +11,7 @@ if(cmd==='status')result=await flow.status();
 else if(cmd==='mode')result=await flow.setMode(arg);
 else if(cmd==='models')result=await flow.models();
 else if(cmd==='usage') {
-  if(arg!==undefined&&arg!=='--force')throw new Error('usage仅支持可选--force，不接受key、bearer或URL');
+  if(arg!==undefined&&arg!=='--force')throw new Error('usage accepts only optional --force, not keys, bearer tokens, or URLs');
   result=await flow.usage({force:arg==='--force'});
 }
 else if(cmd==='queue')result=await flow.queue();
@@ -30,6 +30,6 @@ else if(cmd==='billing-confirm'&&arg==='--use-balance-is-off'&&rest.length===1&&
 }else if(cmd==='billing-revoke'){
   const config=JSON.parse(fs.readFileSync(configFile,'utf8'));config.billingGuard={useBalanceDisabledConfirmed:false,activeGoSubscriptionConfirmed:false,confirmedAt:null,confirmationSource:null};fs.writeFileSync(configFile,JSON.stringify(config,null,2)+'\n');result={status:'revoked'};
 }else{
-  result={version:'1.1.0',channel:'opencode-go',usage:['status (cached quota only)','usage [--force] (read-only official shared quota)','queue','resume EXACT_TASK_ID','models','model opencode-go/STABLE_MODEL','allow-once EXACT_TASK_ID EXACT_GO_MODEL 用户明确授权说明 (human explicit authorization only, one request, expires in ten minutes)','mode auto|gpt|go|off','route request.json','submit request.json','task ID','accept ID review summary','billing-confirm --use-balance-is-off --go-subscription-is-active (human only)','billing-revoke']};
+  result={version:'1.1.0',channel:'opencode-go',usage:['status (cached quota only)','usage [--force] (read-only official shared quota)','queue','resume EXACT_TASK_ID','models','model opencode-go/STABLE_MODEL','allow-once EXACT_TASK_ID EXACT_GO_MODEL USER_EXPLICIT_AUTHORIZATION (human explicit authorization only, one request, expires in ten minutes)','mode auto|gpt|go|off','route request.json','submit request.json','task ID','accept ID review summary','billing-confirm --use-balance-is-off --go-subscription-is-active (human only)','billing-revoke']};
 }
 process.stdout.write(JSON.stringify(result,null,2)+'\n');
